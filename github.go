@@ -108,6 +108,7 @@ func downloadAndExtract(url string) error {
 
 	gzReader, err := gzip.NewReader(gzFile)
 	if err != nil {
+		os.Remove(gzFileName)
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer gzReader.Close()
