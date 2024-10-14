@@ -22,7 +22,7 @@ func getTimestamps(from, to string) []string {
 	var timestamps []string
 
 	if from == "" && to == "" {
-		now := time.Now()
+		now := time.Now().UTC()
 		previousHour := now.Add(-1 * time.Hour)
 		timestamps = append(timestamps, previousHour.Format("2006-01-02-3"))
 		return timestamps
