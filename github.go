@@ -24,17 +24,17 @@ func getTimestamps(from, to string) []string {
 	if from == "" && to == "" {
 		now := time.Now().UTC()
 		previousHour := now.Add(-1 * time.Hour)
-		timestamps = append(timestamps, previousHour.Format("2006-01-02-3"))
+		timestamps = append(timestamps, previousHour.Format("2006-01-02-15"))
 		return timestamps
 	}
 
-	fromTime, err := time.Parse("2006-01-02-3", from)
+	fromTime, err := time.Parse("2006-01-02-15", from)
 	if err != nil {
 		fmt.Println("Invalid 'from' timestamp format. Use dd-mm-yyyy-H.")
 		return timestamps
 	}
 
-	toTime, err := time.Parse("2006-01-02-3", to)
+	toTime, err := time.Parse("2006-01-02-15", to)
 	if err != nil {
 		fmt.Println("Invalid 'to' timestamp format. Use dd-mm-yyyy-H.")
 		return timestamps
@@ -48,7 +48,7 @@ func getTimestamps(from, to string) []string {
 	}
 
 	for t := fromTime; ; t = t.Add(step) {
-		timestamps = append(timestamps, t.Format("2006-01-02-3"))
+		timestamps = append(timestamps, t.Format("2006-01-02-15"))
 		if (step > 0 && !t.Before(toTime)) || (step < 0 && !t.After(toTime)) {
 			break
 		}
@@ -142,12 +142,12 @@ func makeDir(dirName string) error {
 }
 
 func isValidTimestamp(input string) bool {
-	const layout = "2006-01-02-3"
+	const layout = "2006-01-02-15"
 	_, err := time.Parse(layout, input)
 	return err == nil
 }
 
-var timestampFormatError = "Error: Please specify both to and from timestamps in the format '2006-01-02-3'."
+var timestampFormatError = "Error: Please specify both to and from timestamps in the format '2006-01-02-15'."
 var timeOverflowError = "The timestamp cannot be greater than " + getTimestamps("", "")[0] + "."
 
 // Function to read and parse the JSON file
@@ -156,9 +156,9 @@ var timeOverflowError = "The timestamp cannot be greater than " + getTimestamps(
 //
 // outputDirectory (string): the directory to save files to. "githubCommits/" will be made locally if not specified
 //
-// From (string): from timestamp as string in the format "2006-01-02-3"
+// From (string): from timestamp as string in the format "2006-01-02-15"
 //
-// To (string): from timestamp as string in the format "2006-01-02-3"
+// To (string): from timestamp as string in the format "2006-01-02-15"
 //
 // Note: if no timestamp is specified, the previous hour's JSON file will be downloaded.
 //
@@ -321,8 +321,8 @@ func ParseJSONFile(filename string) ([]Event, error) {
 
 func main() {
 	outputDir := flag.String("outputDir", githubCacheDir, "the directory to save files to. 'githubCommits/' will be made locally if not specified")
-	from := flag.String("from", "", "Starting timestamp in '2006-01-02-3' format")
-	to := flag.String("to", "", "Ending timestamp in '2006-01-02-3' format")
+	from := flag.String("from", "", "Starting timestamp in '2006-01-02-15' format")
+	to := flag.String("to", "", "Ending timestamp in '2006-01-02-15' format")
 
 	flag.Parse()
 

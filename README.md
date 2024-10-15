@@ -12,11 +12,11 @@ go build
 
 Usage of ./github-patches:
   -from string
-        Starting timestamp in '2006-01-02-3' format
+        Starting timestamp in '2006-01-02-15' format
   -outputDir string
         the directory to save files to. 'githubCommits/' will be made locally if not specified (default ".githubCommits/")
   -to string
-        Ending timestamp in '2006-01-02-3' format
+        Ending timestamp in '2006-01-02-15' format
 ```
 
 # Examples
@@ -26,7 +26,7 @@ Usage of ./github-patches:
 ```bash
 ./github-patches
 
-cat .githubCommits/2024-10-14-3.json
+cat .githubCommits/2024-10-14-15.json
 
 {"id":"42807516937","type":"IssuesEvent","actor":{"id":41898282,"login":"github-actions[bot]","display_login":"github-actions","gravatar_id":"","url":"https://api.github.com/users/github-actions[bot]","avatar_url":"https://avatars.githubusercontent.com/u/41898282?"},"repo":{"id":859486274,"name":"leyu-sports/leyuio","url":"https://api.github.com/repos/leyu-sports/leyuio"},"payload":{"action":"opened","issue":{"url":"https://api.github...
 {"id":"42807516940","type":"IssuesEvent","actor":{"id":41898282,"login":"github-actions[bot]","display_login":"github-actions","gravatar_id":"","url":"https://api.github.com/users/github-actions[bot]","avatar_url":"https://avatars.githubusercontent.com/u/41898282?"},"repo":{"id":869028658,"name":"long8guoji/long8ty","url":"https://api.github.com/repos/long8guoji/long8ty"},"payload":{"action":"opened","issue":{"url":"https://api.github.com/repos/long8guoji/long8ty/issues/34119","repository_url":"https://api.github.com/repos/long8guoji/long8ty",...
