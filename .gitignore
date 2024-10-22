@@ -25,6 +25,8 @@ go.work.sum
 .env
 
 .githubCommits/
+githubPatches/.githubCommits/
+
 *.json
 
 github-patches

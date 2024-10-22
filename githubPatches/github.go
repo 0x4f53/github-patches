@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,9 +14,7 @@ import (
 	"time"
 )
 
-var githubCacheDir = ".githubCommits/"
-
-var concurrent *bool
+var GithubCacheDir = ".githubCommits/"
 
 func GetISO8601Timestamps(from, to string) []string {
 
@@ -102,7 +99,7 @@ func PrintGharchiveChunkUrls(from, to string) []string {
 
 func downloadAndExtract(url string) error {
 
-	makeDir(githubCacheDir)
+	makeDir(GithubCacheDir)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -111,7 +108,7 @@ func downloadAndExtract(url string) error {
 	defer resp.Body.Close()
 
 	fileName := filepath.Base(url)
-	outFile, err := os.Create(githubCacheDir + fileName)
+	outFile, err := os.Create(GithubCacheDir + fileName)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
@@ -125,7 +122,7 @@ func downloadAndExtract(url string) error {
 		return fmt.Errorf("failed to close file: %w", err)
 	}
 
-	gzFileName := githubCacheDir + fileName
+	gzFileName := GithubCacheDir + fileName
 
 	gzFile, err := os.Open(gzFileName)
 
@@ -176,7 +173,7 @@ func isValidTimestamp(input string) bool {
 }
 
 var timestampFormatError = "Error: Please specify both to and from timestamps in the format '2006-01-02-15'."
-var timeOverflowError = "The timestamp cannot be greater than " + currentISO8601Timestamp + "."
+var timeOverflowError = "The timestamp cannot be greater than the current UTC time!"
 
 // Function to read and parse the JSON file
 //
@@ -188,7 +185,8 @@ var timeOverflowError = "The timestamp cannot be greater than " + currentISO8601
 //
 // To (string): from timestamp as string in the format "2006-01-02-15"
 //
-// Concurrent (bool):
+// Concurrent (bool): download all the patch files at the same time. Note: this ramps up network, disk and CPU usage. Limit this
+// to short timeframes.
 //
 // Note: if no timestamp is specified, the previous hour's JSON file will be downloaded.
 //
@@ -198,7 +196,7 @@ func GetCommitsInRange(outputDirectory, from, to string, concurrent bool) {
 	if outputDirectory != "" {
 		outputDirectory = outputDirectory + "/"
 		makeDir(outputDirectory)
-		githubCacheDir = outputDirectory
+		GithubCacheDir = outputDirectory
 	}
 
 	urls := PrintGharchiveChunkUrls(from, to)
@@ -219,13 +217,12 @@ func GetCommitsInRange(outputDirectory, from, to string, concurrent bool) {
 		wg.Wait()
 	} else {
 		fmt.Println("Downloading and extracting non-concurrently...")
-		fmt.Println(urls)
-		/*for _, url := range urls {
+		for _, url := range urls {
 			fmt.Printf("Downloading: %s\n", url)
 			if err := downloadAndExtract(url); err != nil {
 				fmt.Printf("Error processing %s: %v\n", url, err)
 			}
-		}*/
+		}
 	}
 }
 
@@ -298,7 +295,7 @@ type Org struct {
 	AvatarURL  string `json:"avatar_url"`
 }
 
-func makePatchURL(apiURL string) string {
+func MakePatchURL(apiURL string) string {
 	webPrefix := strings.Replace(apiURL, "https://api.github.com/repos/", "https://github.com/", 1)
 	webCommitURL := strings.Replace(webPrefix, "/commits/", "/commit/", 1) + ".patch"
 	return webCommitURL
@@ -337,7 +334,7 @@ func ParseJSONFile(filename string) ([]Event, error) {
 
 		if len(commits) > 0 {
 			for _, commit := range commits {
-				event.PatchUrl = makePatchURL(commit.URL)
+				event.PatchUrl = MakePatchURL(commit.URL)
 			}
 		}
 
@@ -346,21 +343,4 @@ func ParseJSONFile(filename string) ([]Event, error) {
 	}
 
 	return events, nil
-}
-
-var currentISO8601Timestamp string
-
-func main() {
-	outputDir := flag.String("outputDir", githubCacheDir, "the directory to save files to. 'githubCommits/' will be made locally if not specified")
-	from := flag.String("from", "", "Starting timestamp in '2006-01-02-15' format")
-	to := flag.String("to", "", "Ending timestamp in '2006-01-02-15' format")
-	concurrent = flag.Bool("concurrent", false, "Download multiple threads at once")
-
-	flag.Parse()
-
-	currentISO8601Timestamp = GetISO8601Timestamps("", "")[0]
-	//ISO8601Timestamps := GetISO8601Timestamps("2024-05-02-1", "2024-01-02-23")
-
-	GetCommitsInRange(*outputDir, *from, *to, *concurrent)
-
 }
