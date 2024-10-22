@@ -22,7 +22,7 @@ func GetISO8601Timestamps(from, to string) []string {
 
 	if isValidTimestamp(from) && !isValidTimestamp(to) {
 		fmt.Println(timeOverflowError)
-		return timestamps
+		os.Exit(-1)
 	}
 
 	if (from == "" && to != "") || (from != "" && to == "") {
@@ -31,7 +31,7 @@ func GetISO8601Timestamps(from, to string) []string {
 
 	if (!isValidTimestamp(from) || !isValidTimestamp(to)) && (from != "" && to != "") {
 		fmt.Println(timestampFormatError)
-		return timestamps
+		os.Exit(-1)
 	}
 
 	if from == "" && to == "" {
@@ -44,13 +44,13 @@ func GetISO8601Timestamps(from, to string) []string {
 	fromTime, err := time.Parse("2006-01-02-15", from)
 	if err != nil {
 		fmt.Println("Invalid 'from' timestamp format. Use dd-mm-yyyy-H.")
-		return timestamps
+		os.Exit(-1)
 	}
 
 	toTime, err := time.Parse("2006-01-02-15", to)
 	if err != nil {
 		fmt.Println("Invalid 'to' timestamp format. Use dd-mm-yyyy-H.")
-		return timestamps
+		os.Exit(-1)
 	}
 
 	var step time.Duration
@@ -305,42 +305,70 @@ func MakePatchURL(apiURL string) string {
 //
 // Input:
 //
-// filename (string): A path of the downloaded JSON from Gharchive
+// filenames ([]string): A list of filenames containing gharchive files. You can use filepath.Walk() here
 //
 // Output ([]Event): A parsed slice containing all events
-func ParseJSONFile(filename string) ([]Event, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("error opening file: %v", err)
-	}
-	defer file.Close()
+func ParseJSONFiles(filenames []string) ([]Event, error) {
+	var wg sync.WaitGroup
+	eventChan := make(chan []Event, len(filenames))
+	errChan := make(chan error, len(filenames))
 
-	var events []Event
-	reader := bufio.NewReader(file)
-	for {
-		line, err := reader.ReadString('\n')
+	parseFile := func(filename string) {
+		defer wg.Done()
+
+		file, err := os.Open(filename)
 		if err != nil {
-			if err.Error() == "EOF" {
-				break
+			errChan <- fmt.Errorf("error opening file %s: %v", filename, err)
+			return
+		}
+		defer file.Close()
+
+		var events []Event
+		reader := bufio.NewReader(file)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err.Error() == "EOF" {
+					break
+				}
+				errChan <- fmt.Errorf("error reading file %s: %v", filename, err)
+				return
 			}
-			return nil, fmt.Errorf("error reading file: %v", err)
-		}
-
-		var event Event
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			return nil, fmt.Errorf("error parsing JSON: %v", err)
-		}
-		commits := event.Payload.Commits
-
-		if len(commits) > 0 {
-			for _, commit := range commits {
-				event.PatchUrl = MakePatchURL(commit.URL)
+			var event Event
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				errChan <- fmt.Errorf("error parsing JSON in file %s: %v", filename, err)
+				return
 			}
+			commits := event.Payload.Commits
+			if len(commits) > 0 {
+				for _, commit := range commits {
+					event.PatchUrl = MakePatchURL(commit.URL)
+				}
+			}
+			events = append(events, event)
 		}
-
-		events = append(events, event)
-
+		eventChan <- events
 	}
 
-	return events, nil
+	for _, filename := range filenames {
+		wg.Add(1)
+		go parseFile(filename)
+	}
+
+	go func() {
+		wg.Wait()
+		close(eventChan)
+		close(errChan)
+	}()
+
+	var allEvents []Event
+	for events := range eventChan {
+		allEvents = append(allEvents, events...)
+	}
+
+	if len(errChan) > 0 {
+		return nil, <-errChan
+	}
+
+	return allEvents, nil
 }
