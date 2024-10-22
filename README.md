@@ -35,8 +35,21 @@ cat .githubCommits/2024-10-14-15.json
 
 ### Patches from October 14, 2024 at 3 PM UTC to October 15, 2024 at 2 AM 
 
+**Note:** use the `--concurrent` flag to download files concurrently (at the same time!)
+
 ```bash
 ./github-patches --from=2024-10-14-15 --to=2024-10-15-2
+
+cat .githubCommits/2024-10-14-15.json
+
+{"id":"42807516937","type":"IssuesEvent","actor":{"id":41898282,"login":"github-actions[bot]",...
+...
+```
+
+### Patches for a single timestamp
+
+```bash
+./github-patches --from=2024-10-14-15 --to=2024-10-14-15
 
 cat .githubCommits/2024-10-14-15.json
 

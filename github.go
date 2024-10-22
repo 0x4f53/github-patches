@@ -17,9 +17,25 @@ import (
 
 var githubCacheDir = ".githubCommits/"
 
-func getTimestamps(from, to string) []string {
+var concurrent *bool
+
+func GetISO8601Timestamps(from, to string) []string {
 
 	var timestamps []string
+
+	if isValidTimestamp(from) && !isValidTimestamp(to) {
+		fmt.Println(timeOverflowError)
+		return timestamps
+	}
+
+	if (from == "" && to != "") || (from != "" && to == "") {
+		return timestamps
+	}
+
+	if (!isValidTimestamp(from) || !isValidTimestamp(to)) && (from != "" && to != "") {
+		fmt.Println(timestampFormatError)
+		return timestamps
+	}
 
 	if from == "" && to == "" {
 		now := time.Now().UTC()
@@ -54,14 +70,26 @@ func getTimestamps(from, to string) []string {
 		}
 	}
 
-	return timestamps
+	// remove zeroes from the front to work with gharchive.org
+	var finalTimestamps []string
+
+	for _, timestamp := range timestamps {
+		parts := strings.Split(timestamp, "-")
+		if len(parts) == 4 && strings.HasPrefix(parts[3], "0") {
+			parts[3] = strings.TrimPrefix(parts[3], "0")
+		}
+		timestamp = strings.Join(parts, "-")
+		finalTimestamps = append(finalTimestamps, timestamp)
+	}
+
+	return finalTimestamps
 }
 
-func printGharchiveChunkUrls(from, to string) []string {
+func PrintGharchiveChunkUrls(from, to string) []string {
 
 	var urls []string
 
-	timestamps := getTimestamps(from, to)
+	timestamps := GetISO8601Timestamps(from, to)
 
 	for _, timestamp := range timestamps {
 		url := fmt.Sprintf("https://data.gharchive.org/%s.json.gz", timestamp)
@@ -148,7 +176,7 @@ func isValidTimestamp(input string) bool {
 }
 
 var timestampFormatError = "Error: Please specify both to and from timestamps in the format '2006-01-02-15'."
-var timeOverflowError = "The timestamp cannot be greater than " + getTimestamps("", "")[0] + "."
+var timeOverflowError = "The timestamp cannot be greater than " + currentISO8601Timestamp + "."
 
 // Function to read and parse the JSON file
 //
@@ -160,24 +188,12 @@ var timeOverflowError = "The timestamp cannot be greater than " + getTimestamps(
 //
 // To (string): from timestamp as string in the format "2006-01-02-15"
 //
+// Concurrent (bool):
+//
 // Note: if no timestamp is specified, the previous hour's JSON file will be downloaded.
 //
 // Output: A JSON file downloaded to the directory as specified
-func GetCommitsInRange(outputDirectory, from, to string) {
-
-	if isValidTimestamp(from) && !isValidTimestamp(to) {
-		fmt.Println(timeOverflowError)
-		return
-	}
-
-	if (from == "" && to != "") || (from != "" && to == "") {
-		return
-	}
-
-	if (!isValidTimestamp(from) || !isValidTimestamp(to)) && (from != "" && to != "") {
-		fmt.Println(timestampFormatError)
-		return
-	}
+func GetCommitsInRange(outputDirectory, from, to string, concurrent bool) {
 
 	if outputDirectory != "" {
 		outputDirectory = outputDirectory + "/"
@@ -185,19 +201,32 @@ func GetCommitsInRange(outputDirectory, from, to string) {
 		githubCacheDir = outputDirectory
 	}
 
-	urls := printGharchiveChunkUrls(from, to)
+	urls := PrintGharchiveChunkUrls(from, to)
 
-	var wg sync.WaitGroup
-	for _, url := range urls {
-		wg.Add(1)
-		go func(url string) {
-			defer wg.Done()
+	if concurrent {
+		fmt.Println("Downloading and extracting concurrently...")
+		var wg sync.WaitGroup
+		for _, url := range urls {
+			wg.Add(1)
+			go func(url string) {
+				fmt.Printf("Downloading: %s\n", url)
+				defer wg.Done()
+				if err := downloadAndExtract(url); err != nil {
+					fmt.Printf("Error processing %s: %v\n", url, err)
+				}
+			}(url)
+		}
+		wg.Wait()
+	} else {
+		fmt.Println("Downloading and extracting non-concurrently...")
+		fmt.Println(urls)
+		/*for _, url := range urls {
+			fmt.Printf("Downloading: %s\n", url)
 			if err := downloadAndExtract(url); err != nil {
 				fmt.Printf("Error processing %s: %v\n", url, err)
 			}
-		}(url)
+		}*/
 	}
-	wg.Wait()
 }
 
 // Parser function
@@ -319,13 +348,19 @@ func ParseJSONFile(filename string) ([]Event, error) {
 	return events, nil
 }
 
+var currentISO8601Timestamp string
+
 func main() {
 	outputDir := flag.String("outputDir", githubCacheDir, "the directory to save files to. 'githubCommits/' will be made locally if not specified")
 	from := flag.String("from", "", "Starting timestamp in '2006-01-02-15' format")
 	to := flag.String("to", "", "Ending timestamp in '2006-01-02-15' format")
+	concurrent = flag.Bool("concurrent", false, "Download multiple threads at once")
 
 	flag.Parse()
 
-	GetCommitsInRange(*outputDir, *from, *to)
+	currentISO8601Timestamp = GetISO8601Timestamps("", "")[0]
+	//ISO8601Timestamps := GetISO8601Timestamps("2024-05-02-1", "2024-01-02-23")
+
+	GetCommitsInRange(*outputDir, *from, *to, *concurrent)
 
 }
