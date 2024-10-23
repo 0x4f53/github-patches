@@ -9,8 +9,7 @@ this tool helps you scrape commit metadata pushed to github (and grab their patc
 ```bash
 cd github-patches-cli/
 
-go run main.go
-./github-patches -h
+go run main.go -h
 
 Usage of ./github-patches:
   -from string
@@ -28,7 +27,7 @@ Usage of ./github-patches:
 ### Patches from the last hour
 
 ```bash
-./github-patches
+go run main.go
 
 cat .githubCommits/2024-10-14-15.json
 
@@ -40,7 +39,7 @@ cat .githubCommits/2024-10-14-15.json
 ### Patches from October 14, 2024 at 3 PM UTC to October 15, 2024 at 2 AM 
 
 ```bash
-./github-patches --from=2024-10-14-15 --to=2024-10-15-2
+go run main.go --from=2024-10-14-15 --to=2024-10-15-2
 
 cat .githubCommits/2024-10-14-15.json
 
@@ -51,7 +50,7 @@ cat .githubCommits/2024-10-14-15.json
 ### Patches for a single timestamp
 
 ```bash
-./github-patches --from=2024-10-14-15 --to=2024-10-14-15
+go run main.go --from=2024-10-14-15 --to=2024-10-14-15
 
 cat .githubCommits/2024-10-14-15.json
 
@@ -62,7 +61,7 @@ cat .githubCommits/2024-10-14-15.json
 ### Patches from October 15, 2024 at 2 AM to October 14, 2024 at 3 PM UTC (in reverse)
 
 ```bash
-./github-patches --to=2024-10-14-15 --from=2024-10-15-2
+go run main.go --to=2024-10-14-15 --from=2024-10-15-2
 
 cat .githubCommits/2024-10-15-2.json
 
