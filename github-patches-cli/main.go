@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"githubPatches"
+	"github.com/0x4f53/github-patches"
 	"os"
 	"path/filepath"
 )
