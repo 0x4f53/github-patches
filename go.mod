@@ -1,7 +1,3 @@
-module githubPatches
+module github.com/0x4f53/github-patches
 
 go 1.22.3
-
-replace github.com/0x4f53/github-patches => ./githubPatches
-
-require github.com/0x4f53/github-patches v0.0.0-20241022192754-a43bb6e3356d
