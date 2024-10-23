@@ -7,7 +7,9 @@ this tool helps you scrape commit metadata pushed to github (and grab their patc
 # Usage
 
 ```bash
-go build
+cd github-patches-cli/
+
+go run main.go
 ./github-patches -h
 
 Usage of ./github-patches:
