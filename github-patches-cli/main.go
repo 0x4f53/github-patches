@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/0x4f53/github-patches"
 	"os"
 	"path/filepath"
+
+	"github.com/0x4f53/github-patches"
 )
 
 func main() {
@@ -32,10 +33,13 @@ func main() {
 			}
 			return nil
 		})
-		data, _ := githubPatches.ParseJSONFiles(chunks)
-		for _, line := range data {
-			data, _ := json.Marshal(line)
-			fmt.Println(string(data))
+
+		for _, chunk := range chunks {
+			data, _ := githubPatches.ParsePushEvents(chunk)
+			for _, pushEvent := range data {
+				data, _ := json.Marshal(pushEvent)
+				fmt.Println(string(data))
+			}
 		}
 	}
 
