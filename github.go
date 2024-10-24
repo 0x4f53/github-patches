@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/0x4f53/textsubs"
 )
 
 var GithubCacheDir = ".githubCommits/"
@@ -101,69 +103,131 @@ func downloadAndExtract(url string) error {
 
 	makeDir(GithubCacheDir)
 
-	resp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to download file: %w", err)
-	}
-	defer resp.Body.Close()
-
 	fileName := filepath.Base(url)
-	outFile, err := os.Create(GithubCacheDir + fileName)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer outFile.Close()
-
-	if _, err = io.Copy(outFile, resp.Body); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	if err = outFile.Close(); err != nil {
-		return fmt.Errorf("failed to close file: %w", err)
-	}
-
 	gzFileName := GithubCacheDir + fileName
-
-	gzFile, err := os.Open(gzFileName)
-
-	if err != nil {
-		return fmt.Errorf("failed to open gz file: %w", err)
-	}
-	defer gzFile.Close()
-
-	gzReader, err := gzip.NewReader(gzFile)
-	if err != nil {
-		os.Remove(gzFileName)
-		return fmt.Errorf("failed to create gzip reader: %w", err)
-	}
-	defer gzReader.Close()
-
 	jsonFileName := gzFileName[:len(gzFileName)-3]
-	jsonFile, err := os.Create(jsonFileName)
-	if err != nil {
-		return fmt.Errorf("failed to create json file: %w", err)
-	}
-	defer jsonFile.Close()
 
-	if _, err = io.Copy(jsonFile, gzReader); err != nil {
-		return fmt.Errorf("failed to write json file: %w", err)
+	if _, err := os.Stat(jsonFileName); err == nil {
+		fmt.Printf("JSON file %s already exists. Continuing...\n", jsonFileName)
+		return nil
 	}
 
-	fmt.Printf("Saved and extracted to %s\n", jsonFileName)
-	os.Remove(gzFileName)
+	cachedFiles, _ := listCachedFiles()
+
+	gzFileExists := false
+	for _, item := range cachedFiles {
+		if item == gzFileName {
+			gzFileExists = true
+			break
+		}
+	}
+
+	if gzFileExists {
+		fmt.Printf("Extracting %s to %s\n", gzFileName, jsonFileName)
+
+		gzFile, err := os.Open(gzFileName)
+		if err != nil {
+			return fmt.Errorf("failed to open gz file: %w", err)
+		}
+		defer gzFile.Close()
+
+		gzReader, err := gzip.NewReader(gzFile)
+		if err != nil {
+			return fmt.Errorf("failed to create gzip reader: %w", err)
+		}
+		defer gzReader.Close()
+
+		jsonFile, err := os.Create(jsonFileName)
+		if err != nil {
+			return fmt.Errorf("failed to create json file: %w", err)
+		}
+		defer jsonFile.Close()
+
+		if _, err = io.Copy(jsonFile, gzReader); err != nil {
+			return fmt.Errorf("failed to write json file: %w", err)
+		}
+
+		fmt.Printf("Extracted to %s\n", jsonFileName)
+
+		os.Remove(gzFileName)
+	} else {
+		fmt.Printf("Downloading %s\n", url)
+
+		resp, err := http.Get(url)
+		if err != nil {
+			return fmt.Errorf("failed to download file: %w", err)
+		}
+		defer resp.Body.Close()
+
+		outFile, err := os.Create(gzFileName)
+		if err != nil {
+			return fmt.Errorf("failed to create file: %w", err)
+		}
+		defer outFile.Close()
+
+		if _, err = io.Copy(outFile, resp.Body); err != nil {
+			return fmt.Errorf("failed to write file: %w", err)
+		}
+
+		if err = outFile.Close(); err != nil {
+			return fmt.Errorf("failed to close file: %w", err)
+		}
+
+		fmt.Printf("Extracting %s to %s\n", gzFileName, jsonFileName)
+
+		gzFile, err := os.Open(gzFileName)
+		if err != nil {
+			return fmt.Errorf("failed to open gz file: %w", err)
+		}
+		defer gzFile.Close()
+
+		gzReader, err := gzip.NewReader(gzFile)
+		if err != nil {
+			os.Remove(gzFileName)
+			return fmt.Errorf("failed to create gzip reader: %w", err)
+		}
+		defer gzReader.Close()
+
+		jsonFile, err := os.Create(jsonFileName)
+		if err != nil {
+			return fmt.Errorf("failed to create json file: %w", err)
+		}
+		defer jsonFile.Close()
+
+		if _, err = io.Copy(jsonFile, gzReader); err != nil {
+			return fmt.Errorf("failed to write json file: %w", err)
+		}
+
+		fmt.Printf("Downloaded, saved and extracted to %s\n", jsonFileName)
+
+		os.Remove(gzFileName)
+	}
 
 	return nil
-
 }
 
 func makeDir(dirName string) error {
 	if _, err := os.Stat(dirName); os.IsNotExist(err) {
 		err := os.MkdirAll(dirName, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("Failed to create directory: %w", err)
+			return fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
 	return nil
+}
+
+func listCachedFiles() ([]string, error) {
+	files, err := os.ReadDir(GithubCacheDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var fileNames []string
+
+	for _, file := range files {
+		fileNames = append(fileNames, file.Name())
+	}
+	return fileNames, nil
 }
 
 func isValidTimestamp(input string) bool {
@@ -202,12 +266,11 @@ func GetCommitsInRange(outputDirectory, from, to string, concurrent bool) {
 	urls := PrintGharchiveChunkUrls(from, to)
 
 	if concurrent {
-		fmt.Println("Downloading and extracting concurrently...")
+		fmt.Println("Downloading and extracting multiple files concurrently...")
 		var wg sync.WaitGroup
 		for _, url := range urls {
 			wg.Add(1)
 			go func(url string) {
-				fmt.Printf("Downloading: %s\n", url)
 				defer wg.Done()
 				if err := downloadAndExtract(url); err != nil {
 					fmt.Printf("Error processing %s: %v\n", url, err)
@@ -215,84 +278,16 @@ func GetCommitsInRange(outputDirectory, from, to string, concurrent bool) {
 			}(url)
 		}
 		wg.Wait()
+
 	} else {
+
 		fmt.Println("Downloading and extracting non-concurrently...")
 		for _, url := range urls {
-			fmt.Printf("Downloading: %s\n", url)
 			if err := downloadAndExtract(url); err != nil {
 				fmt.Printf("Error processing %s: %v\n", url, err)
 			}
 		}
 	}
-}
-
-// Parser function
-
-type Event struct {
-	ID        string  `json:"id"`
-	Type      string  `json:"type"`
-	Actor     Actor   `json:"actor"`
-	Repo      Repo    `json:"repo"`
-	Payload   Payload `json:"payload"`
-	Public    bool    `json:"public"`
-	CreatedAt string  `json:"created_at"`
-	Org       *Org    `json:"org,omitempty"` // Org is optional
-	PatchUrl  string  `json:"patchURL,omitempty"`
-}
-
-type Actor struct {
-	ID           int    `json:"id"`
-	Login        string `json:"login"`
-	DisplayLogin string `json:"display_login"`
-	GravatarID   string `json:"gravatar_id"`
-	URL          string `json:"url"`
-	AvatarURL    string `json:"avatar_url"`
-}
-
-type Repo struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-	URL  string `json:"url"`
-}
-
-type Payload struct {
-	RepositoryID int          `json:"repository_id,omitempty"`
-	PushID       int64        `json:"push_id,omitempty"`
-	Size         int          `json:"size,omitempty"`
-	DistinctSize int          `json:"distinct_size,omitempty"`
-	Ref          string       `json:"ref,omitempty"`
-	Head         string       `json:"head,omitempty"`
-	Before       string       `json:"before,omitempty"`
-	Commits      []Commit     `json:"commits,omitempty"`
-	Action       string       `json:"action,omitempty"`
-	Number       int          `json:"number,omitempty"`
-	PullRequest  *PullRequest `json:"pull_request,omitempty"`
-}
-
-type Commit struct {
-	SHA      string `json:"sha"`
-	Author   Author `json:"author"`
-	Message  string `json:"message"`
-	Distinct bool   `json:"distinct"`
-	URL      string `json:"url"`
-}
-
-type Author struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
-}
-
-type PullRequest struct {
-	URL string `json:"url"`
-	// Add additional fields as needed
-}
-
-type Org struct {
-	ID         int    `json:"id"`
-	Login      string `json:"login"`
-	GravatarID string `json:"gravatar_id"`
-	URL        string `json:"url"`
-	AvatarURL  string `json:"avatar_url"`
 }
 
 func MakePatchURL(apiURL string) string {
@@ -301,74 +296,146 @@ func MakePatchURL(apiURL string) string {
 	return webCommitURL
 }
 
+type Actor struct {
+	AvatarURL  string `json:"avatar_url"`
+	GravatarID string `json:"gravatar_id"`
+	ID         int    `json:"id"`
+	Login      string `json:"login"`
+	URL        string `json:"url"`
+}
+
+type Author struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+type Commit struct {
+	Author   Author `json:"author"`
+	Distinct bool   `json:"distinct"`
+	Message  string `json:"message"`
+	Sha      string `json:"sha"`
+	URL      string `json:"url"`
+	PatchURL string `json:"patch_url"`
+}
+
+type Payload struct {
+	Before       string   `json:"before"`
+	Commits      []Commit `json:"commits"`
+	DistinctSize int      `json:"distinct_size"`
+	Head         string   `json:"head"`
+	PushID       int      `json:"push_id"`
+	Ref          string   `json:"ref"`
+	Size         int      `json:"size"`
+	Action       string   `json:"action"`
+	Gist         Gist     `json:"gist"`
+}
+
+type Repo struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type Event struct {
+	Domains   []string  `json:"domains"`
+	Actor     Actor     `json:"actor"`
+	CreatedAt time.Time `json:"created_at"`
+	ID        string    `json:"id"`
+	Payload   Payload   `json:"payload"`
+	Public    bool      `json:"public"`
+	Repo      Repo      `json:"repo"`
+	Type      string    `json:"type"`
+}
+
+type User struct {
+	AvatarURL  string `json:"avatar_url"`
+	GravatarID string `json:"gravatar_id"`
+	ID         int    `json:"id"`
+	Login      string `json:"login"`
+	URL        string `json:"url"`
+}
+
+type Gist struct {
+	Comments    int                    `json:"comments"`
+	CreatedAt   time.Time              `json:"created_at"`
+	Description string                 `json:"description"`
+	Files       map[string]interface{} `json:"files"` // Map for files, since it's an empty object here
+	GitPullURL  string                 `json:"git_pull_url"`
+	GitPushURL  string                 `json:"git_push_url"`
+	HtmlURL     string                 `json:"html_url"`
+	ID          string                 `json:"id"`
+	Public      bool                   `json:"public"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	URL         string                 `json:"url"`
+	User        User                   `json:"user"`
+}
+
 // Function to read and parse the JSON file
 //
 // Input:
 //
 // filenames ([]string): A list of filenames containing gharchive files. You can use filepath.Walk() here
 //
-// Output ([]Event): A parsed slice containing all events
-func ParseJSONFiles(filenames []string) ([]Event, error) {
-	var wg sync.WaitGroup
-	eventChan := make(chan []Event, len(filenames))
-	errChan := make(chan error, len(filenames))
+// Output ([]Event): A parsed slice containing all push events
+func ParseGitHubCommits(filename string) ([]Event, error) {
 
-	parseFile := func(filename string) {
-		defer wg.Done()
+	var events []Event
 
-		file, err := os.Open(filename)
+	file, err := os.Open(filename)
+	if err != nil {
+		return events, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
+		var event Event
+		err := json.Unmarshal(line, &event)
 		if err != nil {
-			errChan <- fmt.Errorf("error opening file %s: %v", filename, err)
-			return
+			return nil, err
 		}
-		defer file.Close()
 
-		var events []Event
-		reader := bufio.NewReader(file)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err.Error() == "EOF" {
-					break
-				}
-				errChan <- fmt.Errorf("error reading file %s: %v", filename, err)
-				return
-			}
-			var event Event
-			if err := json.Unmarshal([]byte(line), &event); err != nil {
-				errChan <- fmt.Errorf("error parsing JSON in file %s: %v", filename, err)
-				return
-			}
-			commits := event.Payload.Commits
-			if len(commits) > 0 {
-				for _, commit := range commits {
-					event.PatchUrl = MakePatchURL(commit.URL)
-				}
-			}
-			events = append(events, event)
+		commits := event.Payload.Commits
+
+		for index := range commits {
+			commits[index].PatchURL = MakePatchURL(commits[index].URL)
 		}
-		eventChan <- events
+
+		capturedDomains, _ := textsubs.DomainsOnly(string(line), false)
+		capturedDomains = removeBlacklistedDomains(capturedDomains)
+		event.Domains = append(event.Domains, capturedDomains...)
+
+		events = append(events, event)
+
 	}
 
-	for _, filename := range filenames {
-		wg.Add(1)
-		go parseFile(filename)
+	return events, nil
+}
+func removeBlacklistedDomains(domains []string) []string {
+
+	var blacklist = []string{
+		"github.dev",
+		"github.com",
+		"githubusercontent.com",
+		"gravatar.com",
+		"akamai.net",
 	}
 
-	go func() {
-		wg.Wait()
-		close(eventChan)
-		close(errChan)
-	}()
-
-	var allEvents []Event
-	for events := range eventChan {
-		allEvents = append(allEvents, events...)
+	blacklistMap := make(map[string]bool)
+	for _, blacklistedDomain := range blacklist {
+		blacklistMap[blacklistedDomain] = true
 	}
 
-	if len(errChan) > 0 {
-		return nil, <-errChan
+	var validDomains []string
+
+	for _, domain := range domains {
+		if !blacklistMap[domain] {
+			validDomains = append(validDomains, domain)
+		}
 	}
 
-	return allEvents, nil
+	return validDomains
 }
