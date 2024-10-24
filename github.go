@@ -38,7 +38,7 @@ func GetISO8601Timestamps(from, to string) []string {
 
 	if from == "" && to == "" {
 		now := time.Now().UTC()
-		previousHour := now.Add(-1 * time.Hour)
+		previousHour := now.Add(-2 * time.Hour)
 		timestamps = append(timestamps, previousHour.Format("2006-01-02-15"))
 		return timestamps
 	}
